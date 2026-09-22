@@ -1,0 +1,354 @@
+-- Modded Blox Fruits Client Hub | GitHub Version
+-- Repository: https://github.com/ImACoolDEV/BloxFruitsModded
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+--------------------------------------------------------------------------------
+-- GITHUB REMOTE CONFIG & DATABASE
+--------------------------------------------------------------------------------
+local GITHUB_RAW_URL = "https://raw.githubusercontent.com/ImACoolDEV/BloxFruitsModded/main/config.json"
+
+-- Blox Fruits NPC Database (First, Second & Third Sea)
+local TARGET_NPCS = {
+    -- First Sea
+    "Bandit", "Monkey", "Gorilla", "Pirate", "Brute", "Desert Bandit", "Desert Officer",
+    "Snow Bandit", "Yeti", "Chief Petty Officer", "Vice Admiral", "Sky Bandit", "Dark Master",
+    "Magma Ninja", "Fishman Warrior", "Fishman Commando", "God's Guard", "Shandorian Warrior",
+    "Wysper", "Cyborg", "Magma Admiral", "Fishman Lord", "Thunder God", "Cyborg",
+    
+    -- Second Sea
+    "Raider", "Mercenary", "Diamond", "Jeremy", "Fajita", "Don Swan", "Swan Pirate",
+    "Factory Staff", "Marine Lieutenant", "Marine Captain", "Zombie", "Vampire",
+    "Snow Trooper", "Winter Warrior", "Tide Keeper", "Order",
+    
+    -- Third Sea
+    "Pirate Port Member", "Pistol Billionaire", "Stone", "Island Empress", "Kilo Admiral",
+    "Captain Elephant", "Beautiful Pirate", "Longma", "Soul Reaper", "Cake Guard",
+    "Baking Staff", "Head Baker", "Cake Queen", "Chocolate Bar Battler", "Sweet Thief"
+}
+
+local TARGET_NPC_LOOKUP = {}
+for _, npcName in ipairs(TARGET_NPCS) do
+    TARGET_NPC_LOOKUP[npcName:lower()] = true
+end
+
+-- Known Fruit Keywords
+local FRUIT_KEYWORDS = {
+    "fruit", "blox fruit", "rocket", "spin", "blade", "spring", "bomb", "smoke",
+    "spike", "flame", "falcon", "ice", "sand", "dark", "diamond", "light", "rubber",
+    "barrier", "ghost", "magma", "quake", "buddha", "love", "spider", "sound",
+    "phoenix", "portal", "rumble", "pain", "blizzard", "gravity", "dough", "shadow",
+    "venom", "control", "spirit", "dragon", "leopard", "kitsune", "t-rex"
+}
+
+-- Attempt to pull updated NPC/Fruit lists from GitHub JSON
+pcall(function()
+    local response = game:HttpGet(GITHUB_RAW_URL)
+    if response then
+        local data = HttpService:JSONDecode(response)
+        if data and data.NPCs then
+            table.clear(TARGET_NPC_LOOKUP)
+            for _, name in ipairs(data.NPCs) do
+                TARGET_NPC_LOOKUP[name:lower()] = true
+            end
+        end
+    end
+end)
+
+--------------------------------------------------------------------------------
+-- SETTINGS & STATE
+--------------------------------------------------------------------------------
+local SETTINGS = {
+    FarmHeight = 7,
+    ScanRadius = 1500,
+    ToggleKey = Enum.KeyCode.RightControl,
+    SelectedStat = "Melee" -- "Melee", "Defense", "Sword", "Demon Fruit"
+}
+
+local Flags = {
+    AutoFarm = false,
+    AutoEquip = false,
+    AutoPickupFruit = false,
+    AutoQuest = false,
+    AutoStats = false,
+    Noclip = false
+}
+
+local Connections = {}
+
+--------------------------------------------------------------------------------
+-- HELPER FUNCTIONS
+--------------------------------------------------------------------------------
+local function getCharacter()
+    return LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character
+end
+
+local function isBloxFruit(model)
+    local nameLower = model.Name:lower()
+    for _, kw in ipairs(FRUIT_KEYWORDS) do
+        if nameLower:find(kw) then
+            return true
+        end
+    end
+    return false
+end
+
+local function getClosestNPC()
+    local char = getCharacter()
+    if not char then return nil, nil end
+    local hrp = char.HumanoidRootPart
+
+    local closestModel, closestHRP = nil, nil
+    local shortestDist = SETTINGS.ScanRadius
+
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj ~= char then
+            if TARGET_NPC_LOOKUP[obj.Name:lower()] or obj.Name:lower():find("bandit") or obj.Name:lower():find("pirate") then
+                local hum = obj:FindFirstChildOfClass("Humanoid")
+                local eHRP = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Torso")
+                
+                if hum and eHRP and hum.Health > 0 then
+                    local dist = (hrp.Position - eHRP.Position).Magnitude
+                    if dist < shortestDist then
+                        shortestDist = dist
+                        closestModel = obj
+                        closestHRP = eHRP
+                    end
+                end
+            end
+        end
+    end
+
+    return closestModel, closestHRP
+end
+
+local function autoEquipWeapon()
+    local char = getCharacter()
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if not char or not backpack then return end
+
+    if not char:FindFirstChildOfClass("Tool") then
+        local tool = backpack:FindFirstChildOfClass("Tool")
+        if tool then
+            char.Humanoid:EquipTool(tool)
+        end
+    end
+end
+
+local function attackWithTool()
+    local char = getCharacter()
+    if not char then return end
+    local tool = char:FindFirstChildOfClass("Tool")
+    if tool then
+        tool:Activate()
+    end
+end
+
+--------------------------------------------------------------------------------
+-- GUI CREATION
+--------------------------------------------------------------------------------
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "BloxFruitsGithubHub"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = PlayerGui
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 380, 0, 340)
+MainFrame.Position = UDim2.new(0.5, -190, 0.4, -170)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
+MainFrame.Parent = ScreenGui
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
+
+local MainStroke = Instance.new("UIStroke", MainFrame)
+MainStroke.Thickness = 2
+MainStroke.Color = Color3.fromRGB(0, 255, 170)
+
+-- Header
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 38)
+TitleBar.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+TitleBar.Parent = MainFrame
+Instance.new("UICorner", TitleBar).CornerRadius = UDim.new(0, 10)
+
+local TitleText = Instance.new("TextLabel")
+TitleText.Size = UDim2.new(1, -20, 1, 0)
+TitleText.Position = UDim2.new(0, 10, 0, 0)
+TitleText.BackgroundTransparency = 1
+TitleText.Text = "🏴‍☠️ BLOX FRUITS MODDED | GITHUB CLIENT"
+TitleText.TextColor3 = Color3.fromRGB(0, 255, 170)
+TitleText.Font = Enum.Font.GothamBold
+TitleText.TextSize = 12
+TitleText.TextXAlignment = Enum.TextXAlignment.Left
+TitleText.Parent = TitleBar
+
+-- Scroll List
+local Scroll = Instance.new("ScrollingFrame")
+Scroll.Size = UDim2.new(1, -16, 1, -50)
+Scroll.Position = UDim2.new(0, 8, 0, 44)
+Scroll.BackgroundTransparency = 1
+Scroll.ScrollBarThickness = 4
+Scroll.Parent = MainFrame
+
+local UIList = Instance.new("UIListLayout")
+UIList.Padding = UDim.new(0, 6)
+UIList.SortOrder = Enum.SortOrder.LayoutOrder
+UIList.Parent = Scroll
+
+local function createToggle(text, order, flagName, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -6, 0, 36)
+    btn.BackgroundColor3 = Color3.fromRGB(26, 26, 36)
+    btn.Text = "  [OFF] " .. text
+    btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 11
+    btn.TextXAlignment = Enum.TextXAlignment.Left
+    btn.LayoutOrder = order
+    btn.Parent = Scroll
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+    local stroke = Instance.new("UIStroke", btn)
+    stroke.Thickness = 1
+    stroke.Color = Color3.fromRGB(45, 45, 60)
+
+    btn.MouseButton1Click:Connect(function()
+        Flags[flagName] = not Flags[flagName]
+        local state = Flags[flagName]
+        
+        btn.Text = state and ("  [ON] " .. text) or ("  [OFF] " .. text)
+        btn.TextColor3 = state and Color3.fromRGB(0, 255, 170) or Color3.fromRGB(200, 200, 200)
+        btn.BackgroundColor3 = state and Color3.fromRGB(18, 48, 36) or Color3.fromRGB(26, 26, 36)
+        stroke.Color = state and Color3.fromRGB(0, 255, 170) or Color3.fromRGB(45, 45, 60)
+
+        if callback then callback(state) end
+    end)
+    return btn
+end
+
+--------------------------------------------------------------------------------
+-- FEATURE TOGGLES
+--------------------------------------------------------------------------------
+
+-- 1. Auto Farm All Mobs
+createToggle("AUTO-FARM ALL BLOX FRUITS NPCS", 1, "AutoFarm", function(enabled)
+    if enabled then
+        Connections.AutoFarm = RunService.Heartbeat:Connect(function()
+            local char = getCharacter()
+            if not char then return end
+
+            local _, enemyHRP = getClosestNPC()
+            if enemyHRP then
+                char.HumanoidRootPart.CFrame = enemyHRP.CFrame * CFrame.new(0, SETTINGS.FarmHeight, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+                if Flags.AutoEquip then autoEquipWeapon() end
+                attackWithTool()
+            end
+        end)
+    else
+        if Connections.AutoFarm then Connections.AutoFarm:Disconnect() Connections.AutoFarm = nil end
+    end
+end)
+
+-- 2. Auto Collect Spawns & Devil Fruits
+createToggle("AUTO-COLLECT & SNIPE ALL FRUITS", 2, "AutoPickupFruit", function(enabled)
+    if enabled then
+        Connections.AutoPickupFruit = RunService.Heartbeat:Connect(function()
+            local char = getCharacter()
+            if not char then return end
+
+            for _, obj in ipairs(Workspace:GetDescendants()) do
+                if obj:IsA("Model") or obj:IsA("Tool") then
+                    if isBloxFruit(obj) then
+                        local handle = obj:FindFirstChild("Handle") or obj:FindFirstChildWhichIsA("BasePart")
+                        if handle then
+                            char.HumanoidRootPart.CFrame = handle.CFrame * CFrame.new(0, 2, 0)
+                            if typeof(firetouchinterest) == "function" then
+                                firetouchinterest(char.HumanoidRootPart, handle, 0)
+                                firetouchinterest(char.HumanoidRootPart, handle, 1)
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    else
+        if Connections.AutoPickupFruit then Connections.AutoPickupFruit:Disconnect() Connections.AutoPickupFruit = nil end
+    end
+end)
+
+-- 3. Auto-Equip Weapon
+createToggle("AUTO-EQUIP WEAPON", 3, "AutoEquip", nil)
+
+-- 4. Auto Allocate Stats
+createToggle("AUTO-ALLOCATE STATS (MELEE / DEFENSE)", 4, "AutoStats", function(enabled)
+    if enabled then
+        Connections.AutoStats = task.spawn(function()
+            while Flags.AutoStats do
+                local remotes = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes") or game:GetService("ReplicatedStorage")
+                local statRemote = remotes:FindFirstChild("AddPoint") or remotes:FindFirstChild("StatPoints")
+                if statRemote then
+                    pcall(function()
+                        statRemote:FireServer(SETTINGS.SelectedStat, 1)
+                    end)
+                end
+                task.wait(0.5)
+            end
+        end)
+    elseif Connections.AutoStats then
+        pcall(task.cancel, Connections.AutoStats)
+        Connections.AutoStats = nil
+    end
+end)
+
+-- 5. Noclip Integration
+createToggle("NOCLIP (PREVENT MAP CLIPPING)", 5, "Noclip", function(enabled)
+    if enabled then
+        Connections.Noclip = RunService.Stepped:Connect(function()
+            local char = getCharacter()
+            if char then
+                for _, part in ipairs(char:GetChildren()) do
+                    if part:IsA("BasePart") then part.CanCollide = false end
+                end
+            end
+        end)
+    else
+        if Connections.Noclip then Connections.Noclip:Disconnect() Connections.Noclip = nil end
+    end
+end)
+
+--------------------------------------------------------------------------------
+-- DRAGGABLE GUI & TOGGLE KEY
+--------------------------------------------------------------------------------
+local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
+
+TitleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true dragStart = input.Position startPos = MainFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then dragging = false end
+        end)
+    end
+end)
+
+TitleBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if not gpe and input.KeyCode == SETTINGS.ToggleKey then
+        MainFrame.Visible = not MainFrame.Visible
+    end
+end)
