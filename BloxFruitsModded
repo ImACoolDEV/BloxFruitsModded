@@ -1,27 +1,23 @@
--- Modded Blox Fruits Client Hub | GitHub Version
--- Repository: https://github.com/ImACoolDEV/BloxFruitsModded
+-- Modded Blox Fruits Client Hub (Roblox Studio Compatible)
+-- Place inside StarterGui or StarterPlayerScripts as a LocalScript
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 --------------------------------------------------------------------------------
--- GITHUB REMOTE CONFIG & DATABASE
+-- CONFIGURATION & NPC DATABASE
 --------------------------------------------------------------------------------
-local GITHUB_RAW_URL = "https://raw.githubusercontent.com/ImACoolDEV/BloxFruitsModded/main/config.json"
-
--- Blox Fruits NPC Database (First, Second & Third Sea)
 local TARGET_NPCS = {
     -- First Sea
     "Bandit", "Monkey", "Gorilla", "Pirate", "Brute", "Desert Bandit", "Desert Officer",
     "Snow Bandit", "Yeti", "Chief Petty Officer", "Vice Admiral", "Sky Bandit", "Dark Master",
     "Magma Ninja", "Fishman Warrior", "Fishman Commando", "God's Guard", "Shandorian Warrior",
-    "Wysper", "Cyborg", "Magma Admiral", "Fishman Lord", "Thunder God", "Cyborg",
+    "Wysper", "Cyborg", "Magma Admiral", "Fishman Lord", "Thunder God",
     
     -- Second Sea
     "Raider", "Mercenary", "Diamond", "Jeremy", "Fajita", "Don Swan", "Swan Pirate",
@@ -39,7 +35,6 @@ for _, npcName in ipairs(TARGET_NPCS) do
     TARGET_NPC_LOOKUP[npcName:lower()] = true
 end
 
--- Known Fruit Keywords
 local FRUIT_KEYWORDS = {
     "fruit", "blox fruit", "rocket", "spin", "blade", "spring", "bomb", "smoke",
     "spike", "flame", "falcon", "ice", "sand", "dark", "diamond", "light", "rubber",
@@ -48,20 +43,6 @@ local FRUIT_KEYWORDS = {
     "venom", "control", "spirit", "dragon", "leopard", "kitsune", "t-rex"
 }
 
--- Attempt to pull updated NPC/Fruit lists from GitHub JSON
-pcall(function()
-    local response = game:HttpGet(GITHUB_RAW_URL)
-    if response then
-        local data = HttpService:JSONDecode(response)
-        if data and data.NPCs then
-            table.clear(TARGET_NPC_LOOKUP)
-            for _, name in ipairs(data.NPCs) do
-                TARGET_NPC_LOOKUP[name:lower()] = true
-            end
-        end
-    end
-end)
-
 --------------------------------------------------------------------------------
 -- SETTINGS & STATE
 --------------------------------------------------------------------------------
@@ -69,14 +50,13 @@ local SETTINGS = {
     FarmHeight = 7,
     ScanRadius = 1500,
     ToggleKey = Enum.KeyCode.RightControl,
-    SelectedStat = "Melee" -- "Melee", "Defense", "Sword", "Demon Fruit"
+    SelectedStat = "Melee"
 }
 
 local Flags = {
     AutoFarm = false,
     AutoEquip = false,
     AutoPickupFruit = false,
-    AutoQuest = false,
     AutoStats = false,
     Noclip = false
 }
@@ -155,13 +135,13 @@ end
 -- GUI CREATION
 --------------------------------------------------------------------------------
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "BloxFruitsGithubHub"
+ScreenGui.Name = "BloxFruitsStudioHub"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 380, 0, 340)
-MainFrame.Position = UDim2.new(0.5, -190, 0.4, -170)
+MainFrame.Size = UDim2.new(0, 380, 0, 320)
+MainFrame.Position = UDim2.new(0.5, -190, 0.4, -160)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
 MainFrame.Parent = ScreenGui
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
@@ -170,7 +150,6 @@ local MainStroke = Instance.new("UIStroke", MainFrame)
 MainStroke.Thickness = 2
 MainStroke.Color = Color3.fromRGB(0, 255, 170)
 
--- Header
 local TitleBar = Instance.new("Frame")
 TitleBar.Size = UDim2.new(1, 0, 0, 38)
 TitleBar.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
@@ -181,14 +160,13 @@ local TitleText = Instance.new("TextLabel")
 TitleText.Size = UDim2.new(1, -20, 1, 0)
 TitleText.Position = UDim2.new(0, 10, 0, 0)
 TitleText.BackgroundTransparency = 1
-TitleText.Text = "🏴‍☠️ BLOX FRUITS MODDED | GITHUB CLIENT"
+TitleText.Text = "🏴‍☠️ BLOX FRUITS MODDED | STUDIO CLIENT"
 TitleText.TextColor3 = Color3.fromRGB(0, 255, 170)
 TitleText.Font = Enum.Font.GothamBold
 TitleText.TextSize = 12
 TitleText.TextXAlignment = Enum.TextXAlignment.Left
 TitleText.Parent = TitleBar
 
--- Scroll List
 local Scroll = Instance.new("ScrollingFrame")
 Scroll.Size = UDim2.new(1, -16, 1, -50)
 Scroll.Position = UDim2.new(0, 8, 0, 44)
@@ -233,10 +211,10 @@ local function createToggle(text, order, flagName, callback)
 end
 
 --------------------------------------------------------------------------------
--- FEATURE TOGGLES
+-- TOGGLE FEATURES
 --------------------------------------------------------------------------------
 
--- 1. Auto Farm All Mobs
+-- 1. Auto Farm NPCs
 createToggle("AUTO-FARM ALL BLOX FRUITS NPCS", 1, "AutoFarm", function(enabled)
     if enabled then
         Connections.AutoFarm = RunService.Heartbeat:Connect(function()
@@ -255,7 +233,7 @@ createToggle("AUTO-FARM ALL BLOX FRUITS NPCS", 1, "AutoFarm", function(enabled)
     end
 end)
 
--- 2. Auto Collect Spawns & Devil Fruits
+-- 2. Auto Collect Spawns & Devil Fruits (Studio Safe)
 createToggle("AUTO-COLLECT & SNIPE ALL FRUITS", 2, "AutoPickupFruit", function(enabled)
     if enabled then
         Connections.AutoPickupFruit = RunService.Heartbeat:Connect(function()
@@ -267,11 +245,8 @@ createToggle("AUTO-COLLECT & SNIPE ALL FRUITS", 2, "AutoPickupFruit", function(e
                     if isBloxFruit(obj) then
                         local handle = obj:FindFirstChild("Handle") or obj:FindFirstChildWhichIsA("BasePart")
                         if handle then
-                            char.HumanoidRootPart.CFrame = handle.CFrame * CFrame.new(0, 2, 0)
-                            if typeof(firetouchinterest) == "function" then
-                                firetouchinterest(char.HumanoidRootPart, handle, 0)
-                                firetouchinterest(char.HumanoidRootPart, handle, 1)
-                            end
+                            -- Move character directly onto fruit handle in Studio
+                            char.HumanoidRootPart.CFrame = handle.CFrame
                         end
                     end
                 end
